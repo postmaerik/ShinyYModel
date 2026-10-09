@@ -1,1 +1,1 @@
-Shiny app the illustrates Van Noordwijk and De Jong's Y model.
+Shiny app that illustrates Van Noordwijk and De Jong's Y model.
