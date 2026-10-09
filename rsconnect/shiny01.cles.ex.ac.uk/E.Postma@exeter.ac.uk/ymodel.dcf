@@ -1,0 +1,12 @@
+name: ymodel
+title: ymodel
+username: E.Postma@exeter.ac.uk
+account: E.Postma@exeter.ac.uk
+server: shiny01.cles.ex.ac.uk
+hostUrl: https://shiny01.cles.ex.ac.uk/__api__
+appId: 75
+bundleId: 300
+url: https://shiny01.cles.ex.ac.uk/ymodel/
+version: 1
+asMultiple: FALSE
+asStatic: FALSE

@@ -1,0 +1,11 @@
+name: ymodel
+title: ymodel
+username:
+account: erikpostma
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 8490077
+bundleId: 12229676
+url: https://erikpostma.shinyapps.io/Ymodel/
+asMultiple: FALSE
+asStatic: FALSE
