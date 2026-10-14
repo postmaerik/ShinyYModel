@@ -17,7 +17,7 @@ function(input, output, session) {
     mean.b      <- input$mean.b
     var.logit.b <- input$var.logit.b
 
-    n <- 200 *sqrt(var.A/1500 * var.logit.b) + 20
+    n <- 300 *sqrt(var.A/1500 * var.logit.b) + 20
   
     A.vector <- rnorm(n, mean.A, sqrt(var.A))
     
