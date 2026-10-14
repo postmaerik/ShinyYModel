@@ -4,6 +4,7 @@
 #
 
 library(shiny)
+library(MASS)
 
 # Define server logic required to draw a histogram
 function(input, output, session) {
@@ -11,24 +12,32 @@ function(input, output, session) {
   
   # Simulate individual data points
   
-  ind.data <- reactive({
-    mean.A      <- input$mean.A
-    var.A       <- input$var.A
-    mean.b      <- input$mean.b
-    var.logit.b <- input$var.logit.b
-
-    n <- 200 *sqrt(var.A/1500 * var.logit.b) + 20
-  
-    A.vector <- rnorm(n, mean.A, sqrt(var.A))
+  ind.data  <- reactive({
+    mean.A  <- input$mean.A
+    var.A   <- input$var.A
+    mean.X  <- input$mean.b
+    var.X   <- input$var.b
+    n       <- input$n
+    r.A.X   <- input$r.A.X
     
-    logit.mean.b <- log(mean.b/(1-mean.b))
-    b.vector <- 1/(1+exp(-rnorm(n, logit.mean.b, sqrt(var.logit.b))))
+    sd.A <- var.A*mean.A
+    sd.X <- var.X*mean.X
     
-    R.vector <- (1-b.vector) * A.vector
-    S.vector <- A.vector - R.vector
-
+    cov.matrix <- matrix(c(
+      sd.A^2, r.A.X * sd.A * sd.X,
+      r.A.X * sd.A * sd.X, sd.X^2), nrow = 2)
+    
+    samples <- mvrnorm(n, mu = c(mean.A, mean.X), Sigma = cov_matrix)
+    total_energy <- pmax(samples[, 1], 0)            # A
+    proportion_survival <- pmin(pmax(samples[, 2], 0), 1) # X
+    
+    proportion_reproduction <- 1 - proportion_survival
+    S <- total_energy * proportion_survival
+    R <- total_energy * proportion_reproduction
+    
+    
     # Calculate mean R and S
-    mean.R <- (1 - mean.b) * mean.A
+    mean.R <- (1 - mean.X) * mean.A
     mean.S <- mean.A - mean.R
     
     data.frame(R.vector=c(mean.R, R.vector), S.vector=c(mean.S, S.vector))
@@ -42,16 +51,13 @@ function(input, output, session) {
     max.A <- mean.A + 2 * sqrt(var.A)
     
     mean.b <- input$mean.b
-    logit.mean.b <- log(mean.b/(1-mean.b))
-    var.logit.b <- input$var.logit.b
+    var.b <- input$var.b
     
-    logit.min.b <- logit.mean.b - 2 * sqrt(var.logit.b)
-    logit.max.b <- logit.mean.b + 2 * sqrt(var.logit.b)
-    min.b <- 1/(1+exp(-(logit.min.b)))
-    max.b <- 1/(1+exp(-(logit.max.b)))
+    min.b <- mean.b - 2 * sqrt(var.b*mean.b)
+    max.b <- mean.b + 2 * sqrt(var.b*mean.b)
     
     par(pty='s', lwd=2, cex=1.5, mar=c(5,5,2, 2))
-    plot(NA, xaxs='i', xlim=c(0, 100), yaxs='i', ylim=c(0,100),
+    plot(NA, xaxs='i', xlim=c(0, 10000), yaxs='i', ylim=c(0,10000),
          xlab= "Reproduction", ylab= "Survival", cex.lab=1.3)
     axis(1, lwd=2); axis(2, lwd=2)
     
@@ -59,18 +65,18 @@ function(input, output, session) {
     ## Acquisition
     if ("A.lines" %in% input$show) {
       lines(x=c(0, mean.A), y=c(mean.A, 0), lty=2)
-    if (var.A>0) {
-      lines(x=c(0, min.A), y=c(min.A, 0), lty=0)
-      lines(x=c(0, max.A), y=c(max.A, 0), lty=0)
-      polygon(x = c(0, min.A, max.A, 0), y = c(min.A, 0, 0, max.A),
-            col = rgb(1, 1, 0, 0.2), border = NA)
-    }
+      if (var.A>0) {
+        lines(x=c(0, min.A), y=c(min.A, 0), lty=0)
+        lines(x=c(0, max.A), y=c(max.A, 0), lty=0)
+        polygon(x = c(0, min.A, max.A, 0), y = c(min.A, 0, 0, max.A),
+                col = rgb(1, 1, 0, 0.2), border = NA)
+      }
     }
     
     ## Allocation
     if ("b.lines" %in% input$show){
-      lines(x=c(0,100), y=c(0, 100 * mean.b/(1-mean.b)), lty=2)
-      if (var.logit.b>0){
+      lines(x=c(0,100), y=c(0, 100 * mean.b), lty=2)
+      if (var.b>0){
         lines(x=c(0,100), y=c(0, 100 * min.b/(1-min.b)), lty=0)
         lines(x=c(0,100), y=c(0, 100 * max.b/(1-max.b)), lty=0)
         polygon(x = c(0, 100, 100, 0), y = c(0, 100 * min.b/(1-min.b), 100 * max.b/(1-max.b), 0),
@@ -84,7 +90,7 @@ function(input, output, session) {
     
     if("points" %in% input$show) {
       points(R.vector, S.vector, 
-           pch=19, col=rgb(0,0,0,0.3), cex=2)
+             pch=19, col=rgb(0,0,0,0.3), cex=2)
     }
     
     # Add regression line
@@ -94,26 +100,26 @@ function(input, output, session) {
     # Add ellipse
     if ("ellipse" %in% input$show){
       
-    A <- cov(cbind(R.vector, S.vector))
-    
-    ctr <- c(mean(R.vector), mean(S.vector))  
-    angles <- seq(0, 2*pi, length.out=200)
-    
-    eigVal  <- eigen(A)$values
-    eigVec  <- eigen(A)$vectors
-    
-    eigScl  <- 2*eigVec %*% diag(sqrt(eigVal))  # scale eigenvectors to length = square-root
-    
-    ellBase <- cbind(2*sqrt(eigVal[1])*cos(angles), 2*sqrt(eigVal[2])*sin(angles)) # normal ellipse
-    ellRot  <- eigVec %*% t(ellBase)                                 # rotated ellipse
-    
-    xMat    <- rbind(ctr[1] + eigScl[1, ], ctr[1] - eigScl[1, ])
-    yMat    <- rbind(ctr[2] + eigScl[2, ], ctr[2] - eigScl[2, ])  
-    
-    # Add to plot  
-    points((ellRot+ctr)[1, ], (ellRot+ctr)[2, ], type="l", lwd=3)
-     matlines(xMat, yMat, lty=1, col = "black", lwd=3) # These lines look wrong if axes are not same length (use pty='s)
-#     points(ctr[1], ctr[2], pch=4, lwd=3)
+      A <- cov(cbind(R.vector, S.vector))
+      
+      ctr <- c(mean(R.vector), mean(S.vector))  
+      angles <- seq(0, 2*pi, length.out=200)
+      
+      eigVal  <- eigen(A)$values
+      eigVec  <- eigen(A)$vectors
+      
+      eigScl  <- 2*eigVec %*% diag(sqrt(eigVal))  # scale eigenvectors to length = square-root
+      
+      ellBase <- cbind(2*sqrt(eigVal[1])*cos(angles), 2*sqrt(eigVal[2])*sin(angles)) # normal ellipse
+      ellRot  <- eigVec %*% t(ellBase)                                 # rotated ellipse
+      
+      xMat    <- rbind(ctr[1] + eigScl[1, ], ctr[1] - eigScl[1, ])
+      yMat    <- rbind(ctr[2] + eigScl[2, ], ctr[2] - eigScl[2, ])  
+      
+      # Add to plot  
+      points((ellRot+ctr)[1, ], (ellRot+ctr)[2, ], type="l", lwd=3)
+      matlines(xMat, yMat, lty=1, col = "black", lwd=3) # These lines look wrong if axes are not same length (use pty='s)
+      #     points(ctr[1], ctr[2], pch=4, lwd=3)
     }
     
   }, height = reactive(input$plot.size))
@@ -121,30 +127,30 @@ function(input, output, session) {
   # Correlation coefficient
   
   corr.input <- reactive({
-    if(input$var.A>0 | input$var.logit.b >0) {
+    if(input$var.A>0 | input$var.b >0) {
       round(cor(ind.data()$R.vector, ind.data()$S.vector), 2)
     } else {
       "not estimable"
     }
-      })
+  })
   
   # Regression coefficient
   reg.input <- reactive({
-    if(input$var.A>0 | input$var.logit.b >0) {
+    if(input$var.A>0 | input$var.b >0) {
       round(lm(ind.data()$S.vector ~ ind.data()$R.vector)$coefficients[2], 2)
     } else {
       "not estimable"
     }
   })
   
-
-
+  
+  
   output$corr.result <- renderUI({
     withMathJax(HTML(
       
-        paste("The <i>correlation</i> between reproduction and survival is <b>", corr.input(), "</b>.<br/>",
+      paste("The <i>correlation</i> between reproduction and survival is <b>", corr.input(), "</b>.<br/>",
             "The <i>slope</i> of a regression of survival against reproduction is <b>", reg.input(), "</b>.<br/><br/>", sep="") 
-      )
+    )
     )
   })
   
