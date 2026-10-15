@@ -15,8 +15,8 @@ function(input, output, session) {
   ind.data  <- reactive({
     mean.A  <- input$mean.A
     var.A   <- input$var.A
-    mean.X  <- input$mean.b
-    var.X   <- input$var.b
+    mean.X  <- input$mean.X
+    var.X   <- input$var.X
     n       <- input$n
     r.A.X   <- input$r.A.X
     
@@ -27,7 +27,7 @@ function(input, output, session) {
       sd.A^2, r.A.X * sd.A * sd.X,
       r.A.X * sd.A * sd.X, sd.X^2), nrow = 2)
     
-    samples <- mvrnorm(n, mu = c(mean.A, mean.X), Sigma = cov_matrix)
+    samples <- mvrnorm(n, mu = c(mean.A, mean.X), Sigma = cov.matrix)
     total_energy <- pmax(samples[, 1], 0)            # A
     proportion_survival <- pmin(pmax(samples[, 2], 0), 1) # X
     
@@ -37,28 +37,29 @@ function(input, output, session) {
     
     
     # Calculate mean R and S
-    mean.R <- (1 - mean.X) * mean.A
+    mean.R <- (1-mean.X) * mean.A
     mean.S <- mean.A - mean.R
     
-    data.frame(R.vector=c(mean.R, R.vector), S.vector=c(mean.S, S.vector))
+    data.frame(R.vector=R, S.vector=S)
   })
   
   # Create plot
   output$Y.model.plot <- renderPlot({
     
     mean.A <- input$mean.A; var.A <- input$var.A
-    min.A <- mean.A - 2 * sqrt(var.A)
-    max.A <- mean.A + 2 * sqrt(var.A)
+    mean.X  <- input$mean.X; var.X <- input$var.X
+    sd.A <- var.A*mean.A
+    sd.X <- var.X*mean.X
     
-    mean.b <- input$mean.b
-    var.b <- input$var.b
+    min.A <- mean.A - 2 * sd.A
+    max.A <- mean.A + 2 * sd.A
     
-    min.b <- mean.b - 2 * sqrt(var.b*mean.b)
-    max.b <- mean.b + 2 * sqrt(var.b*mean.b)
+    min.X <- pmax(mean.X - 2 * sd.X, 0.001)
+    max.X <- pmin(mean.X + 2 * sd.X, 0.999)
     
     par(pty='s', lwd=2, cex=1.5, mar=c(5,5,2, 2))
     plot(NA, xaxs='i', xlim=c(0, 10000), yaxs='i', ylim=c(0,10000),
-         xlab= "Reproduction", ylab= "Survival", cex.lab=1.3)
+         xlab= "Reproduction (Y)", ylab= "Survival (X)", cex.lab=1.3)
     axis(1, lwd=2); axis(2, lwd=2)
     
     # Generate lines
@@ -74,12 +75,10 @@ function(input, output, session) {
     }
     
     ## Allocation
-    if ("b.lines" %in% input$show){
-      lines(x=c(0,100), y=c(0, 100 * mean.b), lty=2)
-      if (var.b>0){
-        lines(x=c(0,100), y=c(0, 100 * min.b/(1-min.b)), lty=0)
-        lines(x=c(0,100), y=c(0, 100 * max.b/(1-max.b)), lty=0)
-        polygon(x = c(0, 100, 100, 0), y = c(0, 100 * min.b/(1-min.b), 100 * max.b/(1-max.b), 0),
+    if ("X.lines" %in% input$show){
+      lines(x=c(0,10000), y=c(0, 10000 * mean.X/(1-mean.X)), lty=2)
+      if (var.X>0){
+        polygon(x = c(0, 10000, 10000, 0), y = c(0, 10000 * min.X/(1-min.X), 10000 * max.X/(1-max.X), 0),
                 col = rgb(0,0,1,0.2), border = NA)
       }
     }
@@ -127,7 +126,7 @@ function(input, output, session) {
   # Correlation coefficient
   
   corr.input <- reactive({
-    if(input$var.A>0 | input$var.b >0) {
+    if(input$var.A>0 | input$var.X >0) {
       round(cor(ind.data()$R.vector, ind.data()$S.vector), 2)
     } else {
       "not estimable"
@@ -136,7 +135,7 @@ function(input, output, session) {
   
   # Regression coefficient
   reg.input <- reactive({
-    if(input$var.A>0 | input$var.b >0) {
+    if(input$var.A>0 | input$var.X >0) {
       round(lm(ind.data()$S.vector ~ ind.data()$R.vector)$coefficients[2], 2)
     } else {
       "not estimable"
